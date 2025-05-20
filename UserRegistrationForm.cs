@@ -1,111 +1,125 @@
 using System;
-using System.Data.SqlClient;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
-public partial class UserRegistrationForm : Form
+namespace WindowsFormsApp2
 {
-    // Database connection string - adjust as per your SQL Server setup
-    // Example for local SQL Server Express:
-    // string connectionString = @"Data Source=.\SQLEXPRESS;Initial Catalog=SarasaviLibraryDB;Integrated Security=True;";
-    // Example for localDB as in search result [5]:
-    string connectionString = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\Path\To\Your\SarasaviLibraryDB.mdf;Integrated Security=True";
-    // IMPORTANT: Replace C:\Path\To\Your\SarasaviLibraryDB.mdf with the actual path to your .mdf file if using LocalDB.
-
-    public UserRegistrationForm()
+    // Borrower.cs
+    public class Borrower
     {
-        InitializeComponent();
-        // Populate ComboBox for Sex if you are using one
-        // cmbSex.Items.AddRange(new string[] { "Male", "Female", "Other" });
+        public int UserNumber { get; set; }
+        public string Name { get; set; }
+        public string Sex { get; set; }
+        public string NationalID { get; set; }
+        public string Address { get; set; }
+
+        public Borrower(int userNumber, string name, string sex, string nationalId, string address)
+        {
+            UserNumber = userNumber;
+            Name = name;
+            Sex = sex;
+            NationalID = nationalId;
+            Address = address;
+        }
     }
 
-    private void btnRegister_Click(object sender, EventArgs e)
+    // DatabaseHelper.cs
+    public class DatabaseHelper
     {
-        // Retrieve data from form controls
-        string userNumber = txtUserNumber.Text.Trim();
-        string name = txtName.Text.Trim();
-        string sex = cmbSex.SelectedItem?.ToString(); // Or get from RadioButton
-        string nic = txtNIC.Text.Trim();
-        string address = txtAddress.Text.Trim();
+        private string connectionString = "Data Source=YOUR_SERVER;Initial Catalog=UserRegistrationDB;Integrated Security=True";
 
-        // Basic Validation: Ensure all fields are filled
-        if (string.IsNullOrEmpty(userNumber) || string.IsNullOrEmpty(name) || string.IsNullOrEmpty(sex) || string.IsNullOrEmpty(nic) || string.IsNullOrEmpty(address))
+        public bool AddBorrower(Borrower borrower)
         {
-            MessageBox.Show("Please fill in all fields.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                string query = "INSERT INTO Borrowers (UserNumber, Name, Sex, NationalID, Address) " +
+                               "VALUES (@UserNumber, @Name, @Sex, @NationalID, @Address)";
+                SqlCommand command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@UserNumber", borrower.UserNumber);
+                command.Parameters.AddWithValue("@Name", borrower.Name);
+                command.Parameters.AddWithValue("@Sex", borrower.Sex);
+                command.Parameters.AddWithValue("@NationalID", borrower.NationalID);
+                command.Parameters.AddWithValue("@Address", borrower.Address);
+
+                connection.Open();
+                int result = command.ExecuteNonQuery();
+                return result > 0;
+            }
+        }
+    }
+
+    // Form1.cs
+    public partial class Form1 : Form
+    {
+        private TextBox txtUserNumber;
+        private TextBox txtName;
+        private TextBox txtSex;
+        private TextBox txtNationalID;
+        private TextBox txtAddress;
+        private Button btnRegister;
+
+        public Form1()
+        {
+            InitializeComponent();
         }
 
-        using (SqlConnection cn = new SqlConnection(connectionString))
+        private void InitializeComponent()
+        {
+            this.txtUserNumber = new TextBox { Location = new System.Drawing.Point(150, 20), Width = 200 };
+            this.txtName = new TextBox { Location = new System.Drawing.Point(150, 60), Width = 200 };
+            this.txtSex = new TextBox { Location = new System.Drawing.Point(150, 100), Width = 200 };
+            this.txtNationalID = new TextBox { Location = new System.Drawing.Point(150, 140), Width = 200 };
+            this.txtAddress = new TextBox { Location = new System.Drawing.Point(150, 180), Width = 200 };
+            this.btnRegister = new Button { Text = "Register", Location = new System.Drawing.Point(150, 220), Width = 200 };
+
+            this.btnRegister.Click += new EventHandler(this.btnRegister_Click);
+
+            this.Controls.Add(new Label { Text = "User Number:", Location = new System.Drawing.Point(50, 20) });
+            this.Controls.Add(txtUserNumber);
+            this.Controls.Add(new Label { Text = "Name:", Location = new System.Drawing.Point(50, 60) });
+            this.Controls.Add(txtName);
+            this.Controls.Add(new Label { Text = "Sex:", Location = new System.Drawing.Point(50, 100) });
+            this.Controls.Add(txtSex);
+            this.Controls.Add(new Label { Text = "National ID:", Location = new System.Drawing.Point(50, 140) });
+            this.Controls.Add(txtNationalID);
+            this.Controls.Add(new Label { Text = "Address:", Location = new System.Drawing.Point(50, 180) });
+            this.Controls.Add(txtAddress);
+            this.Controls.Add(btnRegister);
+
+            this.Text = "User Registration";
+            this.ClientSize = new System.Drawing.Size(400, 300);
+        }
+
+        private void btnRegister_Click(object sender, EventArgs e)
         {
             try
             {
-                cn.Open();
+                int userNumber = int.Parse(txtUserNumber.Text);
+                string name = txtName.Text;
+                string sex = txtSex.Text;
+                string nationalId = txtNationalID.Text;
+                string address = txtAddress.Text;
 
-                // Step 1: Check if User Number or NIC already exists [5]
-                // Assuming you have a table named 'Users' with columns: UserNumber, Name, Sex, NIC, Address
-                string checkQuery = "SELECT COUNT(*) FROM Users WHERE UserNumber = @UserNumber OR NIC = @NIC";
-                using (SqlCommand checkCmd = new SqlCommand(checkQuery, cn))
-                {
-                    checkCmd.Parameters.AddWithValue("@UserNumber", userNumber);
-                    checkCmd.Parameters.AddWithValue("@NIC", nic);
+                Borrower borrower = new Borrower(userNumber, name, sex, nationalId, address);
+                DatabaseHelper db = new DatabaseHelper();
+                bool success = db.AddBorrower(borrower);
 
-                    int userExists = (int)checkCmd.ExecuteScalar();
-                    if (userExists > 0)
-                    {
-                        MessageBox.Show("A user with this User Number or NIC already exists. Please try a different one.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
-                }
-
-                // Step 2: Insert the new user if not already existing [5]
-                string insertQuery = "INSERT INTO Users (UserNumber, Name, Sex, NIC, Address) VALUES (@UserNumber, @Name, @Sex, @NIC, @Address)";
-                using (SqlCommand cmd = new SqlCommand(insertQuery, cn))
-                {
-                    cmd.Parameters.AddWithValue("@UserNumber", userNumber);
-                    cmd.Parameters.AddWithValue("@Name", name);
-                    cmd.Parameters.AddWithValue("@Sex", sex);
-                    cmd.Parameters.AddWithValue("@NIC", nic);
-                    cmd.Parameters.AddWithValue("@Address", address);
-
-                    int rowsAffected = cmd.ExecuteNonQuery();
-                    if (rowsAffected > 0)
-                    {
-                        MessageBox.Show("User registered successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        // Optionally, clear the form or close it
-                        ClearForm();
-                        // this.Close(); // Or navigate to login form
-                    }
-                    else
-                    {
-                        MessageBox.Show("Registration failed. Please try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
-            }
-            catch (SqlException ex)
-            {
-                MessageBox.Show("Database error: " + ex.Message, "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (success)
+                    MessageBox.Show("Registration successful.");
+                else
+                    MessageBox.Show("Registration failed.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("An error occurred: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Error: " + ex.Message);
             }
         }
     }
-
-    private void ClearForm()
-    {
-        txtUserNumber.Clear();
-        txtName.Clear();
-        cmbSex.SelectedIndex = -1; // Reset ComboBox
-        txtNIC.Clear();
-        txtAddress.Clear();
-        txtUserNumber.Focus();
-    }
-
-    // Placeholder for controls - Add these to your form designer
-    // private System.Windows.Forms.TextBox txtUserNumber;
-    // private System.Windows.Forms.TextBox txtName;
-    // private System.Windows.Forms.ComboBox cmbSex;
-    // private System.Windows.Forms.TextBox txtNIC;
-    // private System.Windows.Forms.TextBox txtAddress;
-    // private System.Windows.Forms.Button btnRegister;
 }
+
